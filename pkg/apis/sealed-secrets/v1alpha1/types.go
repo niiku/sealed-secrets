@@ -22,6 +22,10 @@ const (
 	// setting the secret to be available namespace wide.
 	SealedSecretNamespaceWideAnnotation = annoNs + "namespace-wide"
 
+	// SealedSecretNamespaceSelectorWideAnnotation is the name for the annotation for
+	// setting the secret to be available to all namespace matching the provided label selectors.
+	SealedSecretNamespaceSelectorWideAnnotation = annoNs + "namespace-selector"
+
 	// SealedSecretManagedAnnotation is the name for the annotation for
 	// flaging the existing secrets be managed by SealedSecret controller.
 	SealedSecretManagedAnnotation = annoNs + "managed"

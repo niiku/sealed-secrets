@@ -25,6 +25,9 @@ const (
 	// The ClusterWideScope allows the sealed secret to be unsealed in any namespace of the cluster.
 	ClusterWideScope
 
+	// The NamespaceSelectorWideScope allows the sealed secret to be unsealed in any namespace of the cluster matching the provided set of labels during encryption.
+	NamespaceSelectorWideScope
+
 	// The DefaultScope is currently the StrictScope.
 	DefaultScope = StrictScope
 )
@@ -51,6 +54,8 @@ func (s *SealingScope) String() string {
 		return "namespace-wide"
 	case ClusterWideScope:
 		return "cluster-wide"
+	case NamespaceSelectorWideScope:
+		return "namespace-selector"
 	default:
 		return fmt.Sprintf("undefined-%d", *s)
 	}
@@ -66,8 +71,10 @@ func (s *SealingScope) Set(v string) error {
 		*s = NamespaceWideScope
 	case "cluster-wide":
 		*s = ClusterWideScope
+	case "namespace-selector":
+		*s = NamespaceSelectorWideScope
 	default:
-		return fmt.Errorf("must be one of: strict, namespace-wide, cluster-wide")
+		return fmt.Errorf("must be one of: strict, namespace-wide, cluster-wide, namespace-selector")
 	}
 	return nil
 }
@@ -83,6 +90,8 @@ func EncryptionLabel(namespace, name string, scope SealingScope) []byte {
 		l = ""
 	case NamespaceWideScope:
 		l = namespace
+	case NamespaceSelectorWideScope:
+		l = namespace
 	case StrictScope:
 		fallthrough
 	default:
@@ -91,7 +100,7 @@ func EncryptionLabel(namespace, name string, scope SealingScope) []byte {
 	return []byte(l)
 }
 
-// Returns labels followed by clusterWide followed by namespaceWide.
+// Returns labels followed by clusterWide followed by namespaceWide followed by namespace label selector wide.
 func labelFor(o metav1.Object) []byte {
 	return EncryptionLabel(o.GetNamespace(), o.GetName(), SecretScope(o))
 }
@@ -103,6 +112,10 @@ func SecretScope(o metav1.Object) SealingScope {
 	}
 	if o.GetAnnotations()[SealedSecretNamespaceWideAnnotation] == "true" {
 		return NamespaceWideScope
+	}
+	
+	if o.GetAnnotations()[SealedSecretNamespaceSelectorWideAnnotation] != "true" {
+		return NamespaceSelectorWideScope
 	}
 	return StrictScope
 }
@@ -171,6 +184,9 @@ func UpdateScopeAnnotations(anno map[string]string, scope SealingScope) map[stri
 	if scope == ClusterWideScope {
 		anno[SealedSecretClusterWideAnnotation] = "true"
 	}
+	if scope == NamespaceSelectorWideScope {
+		anno[SealedSecretNamespaceSelectorWideAnnotation] = "true"
+	}
 	return anno
 }
 
@@ -195,6 +211,11 @@ func StripLastAppliedAnnotations(annotations map[string]string) {
 // provided secret. This encrypts only the values of each secrets
 // individually, so secrets can be updated one by one.
 func NewSealedSecret(codecs runtimeserializer.CodecFactory, pubKey *rsa.PublicKey, secret *v1.Secret) (*SealedSecret, error) {
+	
+	if SecretScope(secret) == NamespaceSelectorWideScope && secret.GetAnnotations()[""] == "" {
+		return nil, fmt.Errorf("secret must declare a namespace")
+	}
+
 	if SecretScope(secret) != ClusterWideScope && secret.GetNamespace() == "" {
 		return nil, fmt.Errorf("secret must declare a namespace")
 	}
