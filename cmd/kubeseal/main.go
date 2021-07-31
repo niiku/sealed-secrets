@@ -82,7 +82,7 @@ var (
 func init() {
 	buildinfo.FallbackVersion(&VERSION, buildinfo.DefaultVersion)
 
-	flag.Var(&sealingScope, "scope", "Set the scope of the sealed secret: strict, namespace-wide, cluster-wide (defaults to strict). Mandatory for --raw, otherwise the 'sealedsecrets.bitnami.com/cluster-wide' and 'sealedsecrets.bitnami.com/namespace-wide' annotations on the input secret can be used to select the scope.")
+	flag.Var(&sealingScope, "scope", "Set the scope of the sealed secret: strict, namespace-wide, cluster-wide, namespace-selector (defaults to strict). Mandatory for --raw, otherwise the 'sealedsecrets.bitnami.com/cluster-wide', 'sealedsecrets.bitnami.com/namespace-wide' and 'sealedsecrets.bitnami.com/namespace-scope' annotations on the input secret can be used to select the scope.")
 	flag.BoolVar(&reEncrypt, "rotate", false, "")
 	flag.BoolVar(&reEncrypt, "re-encrypt", false, "Re-encrypt the given sealed secret to use the latest cluster key.")
 	flag.CommandLine.MarkDeprecated("rotate", "please use --re-encrypt instead")

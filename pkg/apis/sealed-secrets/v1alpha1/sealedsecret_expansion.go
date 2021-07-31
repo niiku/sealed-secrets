@@ -24,10 +24,8 @@ const (
 	NamespaceWideScope
 	// The ClusterWideScope allows the sealed secret to be unsealed in any namespace of the cluster.
 	ClusterWideScope
-
 	// The NamespaceSelectorWideScope allows the sealed secret to be unsealed in any namespace of the cluster matching the provided set of labels during encryption.
 	NamespaceSelectorWideScope
-
 	// The DefaultScope is currently the StrictScope.
 	DefaultScope = StrictScope
 )
@@ -114,7 +112,7 @@ func SecretScope(o metav1.Object) SealingScope {
 		return NamespaceWideScope
 	}
 	
-	if o.GetAnnotations()[SealedSecretNamespaceSelectorWideAnnotation] != "true" {
+	if _, exists := o.GetAnnotations()[SealedSecretNamespaceSelectorWideAnnotation]; exists {
 		return NamespaceSelectorWideScope
 	}
 	return StrictScope
