@@ -66,6 +66,7 @@ var (
 	secretName     = flag.String("name", "", "Name of the sealed secret (required with --raw and default (strict) scope)")
 	fromFile       = flag.StringSlice("from-file", nil, "(only with --raw) Secret items can be sourced from files. Pro-tip: you can use /dev/stdin to read pipe input. This flag tries to follow the same syntax as in kubectl")
 	sealingScope   ssv1alpha1.SealingScope
+	nsSelector     = flag.StringArrayP("selector", "l", make([]string, 0), "Selector (label query) of namespaces in which the sealed secret can be decrypted.")
 	reEncrypt      bool // re-encrypt command
 	unseal         = flag.Bool("recovery-unseal", false, "Decrypt a sealed secrets file obtained from stdin, using the private key passed with --recovery-private-key. Intended to be used in disaster recovery mode.")
 	privKeys       = flag.StringSlice("recovery-private-key", nil, "Private key filename used by the --recovery-unseal command. Multiple files accepted either via comma separated list or by repetition of the flag. Either PEM encoded private keys or a backup of a json/yaml encoded k8s sealed-secret controller secret (and v1.List) are accepted. ")
@@ -82,7 +83,7 @@ var (
 func init() {
 	buildinfo.FallbackVersion(&VERSION, buildinfo.DefaultVersion)
 
-	flag.Var(&sealingScope, "scope", "Set the scope of the sealed secret: strict, namespace-wide, cluster-wide, namespace-selector (defaults to strict). Mandatory for --raw, otherwise the 'sealedsecrets.bitnami.com/cluster-wide', 'sealedsecrets.bitnami.com/namespace-wide' and 'sealedsecrets.bitnami.com/namespace-scope' annotations on the input secret can be used to select the scope.")
+	flag.Var(&sealingScope, "scope", "Set the scope of the sealed secret: strict, namespace-wide, cluster-wide, namespace-selector (defaults to strict). Mandatory for --raw, otherwise the 'sealedsecrets.bitnami.com/cluster-wide', 'sealedsecrets.bitnami.com/namespace-wide' and 'sealedsecrets.bitnami.com/namespace-selector' annotations on the input secret can be used to select the scope.")
 	flag.BoolVar(&reEncrypt, "rotate", false, "")
 	flag.BoolVar(&reEncrypt, "re-encrypt", false, "Re-encrypt the given sealed secret to use the latest cluster key.")
 	flag.CommandLine.MarkDeprecated("rotate", "please use --re-encrypt instead")
@@ -239,7 +240,7 @@ func openCert(certURL string) (io.ReadCloser, error) {
 // Seal reads a k8s Secret resource parsed from an input reader by a given codec, encrypts all its secrets
 // with a given public key, using the name and namespace found in the input secret, unless explicitly overridden
 // by the overrideName and overrideNamespace arguments.
-func seal(in io.Reader, out io.Writer, codecs runtimeserializer.CodecFactory, pubKey *rsa.PublicKey, scope ssv1alpha1.SealingScope, allowEmptyData bool, overrideName, overrideNamespace string) error {
+func seal(in io.Reader, out io.Writer, codecs runtimeserializer.CodecFactory, pubKey *rsa.PublicKey, scope ssv1alpha1.SealingScope, nsSelector []string, allowEmptyData bool, overrideName, overrideNamespace string) error {
 	secret, err := readSecret(codecs.UniversalDecoder(), in)
 	if err != nil {
 		return err
@@ -719,7 +720,7 @@ func run(w io.Writer, inputFileName, outputFileName, secretName, controllerNs, c
 		return encryptSecretItem(w, secretName, ns, data, sealingScope, pubKey)
 	}
 
-	return seal(input, w, scheme.Codecs, pubKey, sealingScope, allowEmptyData, secretName, "")
+	return seal(input, w, scheme.Codecs, pubKey, sealingScope, nsSelector, allowEmptyData, secretName, "")
 }
 
 func main() {
