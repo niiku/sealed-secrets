@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"text/template"
 
 	v1 "k8s.io/api/core/v1"
@@ -80,6 +82,22 @@ func (s *SealingScope) Set(v string) error {
 // Type implements the pflag.Value interface
 func (s *SealingScope) Type() string { return "string" }
 
+type NamespaceSelector map[string]string
+
+func (nsSelector *NamespaceSelector) String() string {
+	return json.Marshal(nsSelector)
+}
+
+func (nsSelector *NamespaceSelector) Set(v string) {
+
+	selector := strings.Split(v, "=")
+	if len(selector) != 2 {
+		return fmt.Errorf("--selector must be provided as a key/value pair (e.g. label=value)")
+	}
+	nsSelector[selector[0]] = selector[1]
+	return nil
+}
+
 // EncryptionLabel returns the label meant to be used for encrypting a sealed secret according to scope.
 func EncryptionLabel(namespace, name string, scope SealingScope) []byte {
 	var l string
@@ -111,7 +129,7 @@ func SecretScope(o metav1.Object) SealingScope {
 	if o.GetAnnotations()[SealedSecretNamespaceWideAnnotation] == "true" {
 		return NamespaceWideScope
 	}
-	
+
 	if _, exists := o.GetAnnotations()[SealedSecretNamespaceSelectorWideAnnotation]; exists {
 		return NamespaceSelectorWideScope
 	}
@@ -209,7 +227,7 @@ func StripLastAppliedAnnotations(annotations map[string]string) {
 // provided secret. This encrypts only the values of each secrets
 // individually, so secrets can be updated one by one.
 func NewSealedSecret(codecs runtimeserializer.CodecFactory, pubKey *rsa.PublicKey, secret *v1.Secret) (*SealedSecret, error) {
-	
+
 	if SecretScope(secret) == NamespaceSelectorWideScope && secret.GetAnnotations()[""] == "" {
 		return nil, fmt.Errorf("secret must declare a namespace")
 	}

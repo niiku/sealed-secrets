@@ -66,7 +66,7 @@ var (
 	secretName     = flag.String("name", "", "Name of the sealed secret (required with --raw and default (strict) scope)")
 	fromFile       = flag.StringSlice("from-file", nil, "(only with --raw) Secret items can be sourced from files. Pro-tip: you can use /dev/stdin to read pipe input. This flag tries to follow the same syntax as in kubectl")
 	sealingScope   ssv1alpha1.SealingScope
-	nsSelector     = flag.StringArrayP("selector", "l", make([]string, 0), "Selector (label query) of namespaces in which the sealed secret can be decrypted.")
+	nsSelector     = flag.String("selector", "l", make([]string, 0), "Selector (label query) of namespaces in which the sealed secret can be decrypted.")
 	reEncrypt      bool // re-encrypt command
 	unseal         = flag.Bool("recovery-unseal", false, "Decrypt a sealed secrets file obtained from stdin, using the private key passed with --recovery-private-key. Intended to be used in disaster recovery mode.")
 	privKeys       = flag.StringSlice("recovery-private-key", nil, "Private key filename used by the --recovery-unseal command. Multiple files accepted either via comma separated list or by repetition of the flag. Either PEM encoded private keys or a backup of a json/yaml encoded k8s sealed-secret controller secret (and v1.List) are accepted. ")
@@ -240,7 +240,7 @@ func openCert(certURL string) (io.ReadCloser, error) {
 // Seal reads a k8s Secret resource parsed from an input reader by a given codec, encrypts all its secrets
 // with a given public key, using the name and namespace found in the input secret, unless explicitly overridden
 // by the overrideName and overrideNamespace arguments.
-func seal(in io.Reader, out io.Writer, codecs runtimeserializer.CodecFactory, pubKey *rsa.PublicKey, scope ssv1alpha1.SealingScope, nsSelector []string, allowEmptyData bool, overrideName, overrideNamespace string) error {
+func seal(in io.Reader, out io.Writer, codecs runtimeserializer.CodecFactory, pubKey *rsa.PublicKey, scope ssv1alpha1.SealingScope, nsSelector map[string]string, allowEmptyData bool, overrideName, overrideNamespace string) error {
 	secret, err := readSecret(codecs.UniversalDecoder(), in)
 	if err != nil {
 		return err
@@ -423,7 +423,7 @@ func sealMergingInto(in io.Reader, filename string, codecs runtimeserializer.Cod
 	}
 
 	var buf bytes.Buffer
-	if err := seal(in, &buf, codecs, pubKey, scope, allowEmptyData, orig.Name, orig.Namespace); err != nil {
+	if err := seal(in, &buf, codecs, pubKey, scope, *nsSelector, allowEmptyData, orig.Name, orig.Namespace); err != nil {
 		return err
 	}
 
@@ -593,7 +593,7 @@ func unsealSealedSecret(w io.Writer, in io.Reader, codecs runtimeserializer.Code
 	return resourceOutput(w, codecs, v1.SchemeGroupVersion, sec)
 }
 
-func run(w io.Writer, inputFileName, outputFileName, secretName, controllerNs, controllerName, certURL string, printVersion, validateSecret, reEncrypt, dumpCert, raw, allowEmptyData bool, fromFile []string, mergeInto string, unseal bool, privKeys []string) (err error) {
+func run(w io.Writer, inputFileName, outputFileName, secretName, controllerNs, controllerName, certURL string, printVersion, validateSecret, reEncrypt, dumpCert, raw, allowEmptyData bool, fromFile []string, mergeInto string, unseal bool, privKeys []string, nsSelector map[string]string) (err error) {
 	if len(fromFile) != 0 && !raw {
 		return fmt.Errorf("--from-file requires --raw")
 	}
@@ -720,14 +720,14 @@ func run(w io.Writer, inputFileName, outputFileName, secretName, controllerNs, c
 		return encryptSecretItem(w, secretName, ns, data, sealingScope, pubKey)
 	}
 
-	return seal(input, w, scheme.Codecs, pubKey, sealingScope, nsSelector, allowEmptyData, secretName, "")
+	return seal(input, w, scheme.Codecs, pubKey, sealingScope, *nsSelector, allowEmptyData, secretName, "")
 }
 
 func main() {
 	flag.Parse()
 	goflag.CommandLine.Parse([]string{})
 
-	if err := run(os.Stdout, *inputFileName, *outputFileName, *secretName, *controllerNs, *controllerName, *certURL, *printVersion, *validateSecret, reEncrypt, *dumpCert, *raw, *allowEmptyData, *fromFile, *mergeInto, *unseal, *privKeys); err != nil {
+	if err := run(os.Stdout, *inputFileName, *outputFileName, *secretName, *controllerNs, *controllerName, *certURL, *printVersion, *validateSecret, reEncrypt, *dumpCert, *raw, *allowEmptyData, *fromFile, *mergeInto, *unseal, *privKeys, *nsSelector); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
